@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     numberOfLoops = atoi(argv[3]);
   }
   
-  INIReader iniReader("../config/config.ini");
+  INIReader iniReader("config/config.ini");
   if (iniReader.ParseError() < 0) {
       std::cout << "Can't load 'test.ini'\n";
       return 1;
