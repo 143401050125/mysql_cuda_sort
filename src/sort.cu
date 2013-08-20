@@ -181,7 +181,7 @@ int main(int argc, char* argv[])
   
   tableName = argv[1];
 
-  INIReader iniReader("../config/config.ini");
+  INIReader iniReader("config/config.ini");
   if (iniReader.ParseError() < 0) {
       std::cout << "Can't load 'test.ini'\n";
       return 1;
