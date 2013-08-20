@@ -18,9 +18,17 @@ $ dump_generator <table_name>[ <step=10000>[ <numberOfLoops=1>]]
 
 compile:
 ```
-$ nvcc -o sort sort.cu ../lib/inih/cpp/INIReader.cpp ../lib/inih/ini.c -I/usr/include/mysql -lmysqlclient
+$ nvcc -o bin/sort src/sort.cu lib/inih/cpp/INIReader.cpp lib/inih/ini.c -I/usr/include/mysql -lmysqlclient
 ```
 execute:
 ```
-$ sort <table_name>
+$ bin/sort <table_name>
+```
+
+on my laptop, with geforce 610m, for an unindexed table with 1M lines, and default mysql config:
+
+```
+$ optirun bin/sort test_data_1000000
+gpu query execution and sorting took: 3.922 seconds
+cpu query execution and sorting took: 7.574 seconds
 ```
