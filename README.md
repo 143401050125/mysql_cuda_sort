@@ -7,11 +7,11 @@ sorting mysql result set on gpu using thrust, and bechmarking against standard s
 
 compile:
 ```
-$ g++ -o dump_generator dump_generator.cpp ../lib/inih/ini.c ../lib/inih/cpp/INIReader.cpp
+$ g++ -o bin/dump_generator src/dump_generator.cpp lib/inih/ini.c lib/inih/cpp/INIReader.cpp
 ```
 execute:
 ```
-$ dump_generator <table_name>[ <step=10000>[ <numberOfLoops=1>]]
+$ bin/dump_generator <table_name>[ <step=10000>[ <numberOfLoops=1>]]
 ```
 
 *  **sort** - executes a select query and sorts it, first with thrust, then with order by, and prints execution time
