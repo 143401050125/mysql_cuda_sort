@@ -40,16 +40,20 @@ class Sorter
 void printElapsedTime(const timeval& stopTime, const timeval& startTime, const char* processorType)
 {
   int elapsedSeconds = stopTime.tv_sec - startTime.tv_sec;
-  int elapsedMilliSeconds;
+  double elapsedMilliSeconds;
   
   if (stopTime.tv_usec < startTime.tv_usec) {
     elapsedSeconds -= 1;
     elapsedMilliSeconds = (1000 + (stopTime.tv_usec / 1000)) - (startTime.tv_usec / 1000);
   } else {
-    elapsedMilliSeconds = stopTime.tv_usec - startTime.tv_usec;
+    elapsedMilliSeconds = (stopTime.tv_usec / 1000) - (startTime.tv_usec / 1000);
   }
   
-  std::cout<<processorType<<" query execution and sorting took: "<<elapsedSeconds<<"."<<elapsedMilliSeconds<<" seconds"<<std::endl;  
+  std::cout<<elapsedMilliSeconds<<std::endl;
+  
+  double elapsedTime = elapsedSeconds + (elapsedMilliSeconds / 1000); 
+  
+  std::cout<<processorType<<" query execution and sorting took: "<<elapsedTime<<" seconds"<<std::endl;  
 }
 
 void verifyResult(const thrust::host_vector<MYSQL_ROW>& h_vec, int sortColumnIndex, const char* processorType)
