@@ -4,3 +4,5 @@ separate main
 exceptions and error handling
 order by different types
 order by rand()
+different mysql configs
+more benchmarks
