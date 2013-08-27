@@ -13,6 +13,8 @@
 
 #include "../lib/inih/cpp/INIReader.h"
 
+#include "QueryParser.hpp"
+
 class Sortable
 {
   public:
@@ -48,8 +50,6 @@ void printElapsedTime(const timeval& stopTime, const timeval& startTime, const c
   } else {
     elapsedMilliSeconds = (stopTime.tv_usec / 1000) - (startTime.tv_usec / 1000);
   }
-  
-  std::cout<<elapsedMilliSeconds<<std::endl;
   
   double elapsedTime = elapsedSeconds + (elapsedMilliSeconds / 1000); 
   
@@ -131,7 +131,7 @@ void gpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, c
   printElapsedTime(stopTime, startTime, "gpu");
 }
 
-void cpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, const char *dbDatabase, std::string query, const std::string sortColumnName, int sortColumnIndex)
+void cpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, const char *dbDatabase, std::string query, int sortColumnIndex)
 {
   MYSQL *conn;
   MYSQL_RES *result;
@@ -145,10 +145,6 @@ void cpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, c
   conn = mysql_init(NULL);
   mysql_real_connect(conn, dbServer, dbUser, dbPassword, dbDatabase, 0, NULL, 0);
 
-  std::ostringstream fullQuery;
-  fullQuery<<query<<" ORDER BY "<<sortColumnName;
-  query = fullQuery.str();
-  
   gettimeofday(&startTime, NULL);
   
   mysql_query(conn, query.c_str());
@@ -197,13 +193,12 @@ int main(int argc, char* argv[])
   const char *dbDatabase = iniReader.Get("database", "database", "test").c_str();
   
   std::ostringstream queryBuilder;
-  queryBuilder<<"SELECT SQL_NO_CACHE id, text_col, int_col, double_col FROM "<<tableName;
+  queryBuilder<<"SELECT SQL_NO_CACHE id, text_col, int_col, double_col FROM "<<tableName<<" ORDER BY int_col";
 
-  std::string query = queryBuilder.str();
-  std::string sortColumnName("int_col");
-  
-  gpuSort(dbServer, dbUser, dbPassword, dbDatabase, query, 2);
-  cpuSort(dbServer, dbUser, dbPassword, dbDatabase, query, sortColumnName, 2);
+  QueryParserResult result = QueryParser::parse(queryBuilder.str());
+
+  gpuSort(dbServer, dbUser, dbPassword, dbDatabase, result.getCroppedQuery(), result.getSortColumnNumber());
+  cpuSort(dbServer, dbUser, dbPassword, dbDatabase, result.getQuery(), result.getSortColumnNumber());
 
   return 0;
 }
