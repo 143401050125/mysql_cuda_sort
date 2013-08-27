@@ -1,0 +1,6 @@
+makefile
+separate benchmarking from logic
+separate main
+exceptions and error handling
+order by different types
+order by rand()
