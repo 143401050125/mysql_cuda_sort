@@ -6,3 +6,5 @@ order by different types
 order by rand()
 different mysql configs
 more benchmarks
+order by multiple columns
+handle limit
