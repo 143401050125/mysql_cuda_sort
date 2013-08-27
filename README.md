@@ -18,7 +18,7 @@ $ bin/dump_generator <table_name>[ <step=10000>[ <numberOfLoops=1>]]
 
 compile:
 ```
-$ nvcc -o bin/sort src/sort.cu lib/inih/cpp/INIReader.cpp lib/inih/ini.c -I/usr/include/mysql -lmysqlclient
+$ nvcc -o bin/sort src/sort.cu lib/inih/cpp/INIReader.cpp lib/inih/ini.c -I/usr/include/mysql -lmysqlclient -lboost_regex
 ```
 execute:
 ```
