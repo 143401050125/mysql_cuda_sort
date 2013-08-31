@@ -2,6 +2,7 @@
 #define __QUERYPARSER_H__
 
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <iterator>
 #include <boost/regex.hpp>
@@ -14,6 +15,7 @@ class QueryParserResult
     std::string croppedQuery;
     std::string sortColumn;
     short sortColumnNumber;
+    short sortColumnType;
     
   public:
     QueryParserResult();
@@ -27,6 +29,8 @@ class QueryParserResult
     QueryParserResult* setSortColumn(std::string _sortColumn);
     short getSortColumnNumber();
     QueryParserResult* setSortColumnNumber(short _sortColumnNumber);
+    short getSortColumnType();
+    QueryParserResult* setSortColumnType(short _sortColumnType);
 };
 
 class QueryParser
@@ -34,10 +38,10 @@ class QueryParser
   private:
     static std::vector<std::string> explodeColumns(const std::string& s, char delim);
   public:
-    static QueryParserResult parse(std::string query);
+    static QueryParserResult parse(std::string query, bool explicitType, MYSQL *conn);
 };
 
-inline QueryParserResult QueryParser::parse(std::string query)
+inline QueryParserResult QueryParser::parse(std::string query, bool explicitType, MYSQL *conn)
 {
   QueryParserResult result(query);
   
@@ -56,18 +60,57 @@ inline QueryParserResult QueryParser::parse(std::string query)
     //cut the end of the query
     boost::regex_replace(std::back_inserter(parsedQuery), query.begin(), query.end(), orderByPattern, "");
     result.setCroppedQuery(parsedQuery);
-    
-    std::vector<std::string> columns = QueryParser::explodeColumns(matches[1].str(), ',');
-    for (short i = 0; i < columns.size(); i++) {
-      if (columns[i] == result.getSortColumn()) {
-	result.setSortColumnNumber(i);
-	break;
+
+    short i;
+    if (matches[1].str() != "*" && explicitType) {
+      std::cout<<"good branch"<<std::endl;
+      //iterate over exploded columns and set sortColumnNumber
+      std::vector<std::string> columns = QueryParser::explodeColumns(matches[1].str(), ',');
+      for (i = 0; i < columns.size(); i++) {
+	if (columns[i] == result.getSortColumn()) {
+	  result.setSortColumnNumber(i);
+	  break;
+	}
+	
+	if (i == columns.size() - 1) {
+	  //TODO: throw an exception, or do some error handling
+	}
+      }
+    } else {
+      //execute query with LIMIT 1, then iterate over columns, and set sortColumnNumber and sortColumnType
+      std::ostringstream limitedQueryBuilder;
+      limitedQueryBuilder<<parsedQuery<<" LIMIT 1";
+      
+      MYSQL_RES *queryResult;
+      MYSQL_FIELD* field;
+
+      mysql_query(conn, limitedQueryBuilder.str().c_str());
+      queryResult = mysql_store_result(conn);
+      
+      //tableName.(columnName)
+      boost::regex sortColumnPattern("(?:[\\w]*\\.)?([\\w]+)");
+      boost::smatch sortColumnMatches;
+
+      i = 0;
+      std::ostringstream columnName;
+      while (field = mysql_fetch_field(queryResult)) {
+	if (boost::regex_match(result.getSortColumn(), sortColumnMatches, sortColumnPattern)) {
+	  columnName.str("");
+	  columnName<<field->name;
+	  if (columnName.str() == sortColumnMatches[1].str()) {
+	    result.setSortColumnNumber(i);
+	    if (!explicitType) {
+	      result.setSortColumnType(field->type);
+	    }
+	    break;
+	  }
+	}
+	i++;
       }
       
-      if (i == columns.size() - 1) {
-	//TODO: throw an exception, or do some error handling
-      }
+      mysql_free_result(queryResult);
     }    
+
   }
   
   return result;
@@ -158,6 +201,18 @@ inline short QueryParserResult::getSortColumnNumber()
 inline QueryParserResult* QueryParserResult::setSortColumnNumber(short _sortColumnNumber)
 {
   this->sortColumnNumber = _sortColumnNumber;
+  
+  return this;
+}
+
+inline short QueryParserResult::getSortColumnType()
+{
+  return this->sortColumnType;
+}
+
+inline QueryParserResult* QueryParserResult::setSortColumnType(short _sortColumnType)
+{
+  this->sortColumnType = _sortColumnType;
   
   return this;
 }

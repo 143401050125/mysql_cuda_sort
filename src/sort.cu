@@ -195,8 +195,14 @@ int main(int argc, char* argv[])
   std::ostringstream queryBuilder;
   queryBuilder<<"SELECT SQL_NO_CACHE id, text_col, int_col, double_col FROM "<<tableName<<" ORDER BY int_col";
 
-  QueryParserResult result = QueryParser::parse(queryBuilder.str());
+  MYSQL *conn;
+  conn = mysql_init(NULL);
+  mysql_real_connect(conn, dbServer, dbUser, dbPassword, dbDatabase, 0, NULL, 0);
 
+  QueryParserResult result = QueryParser::parse(queryBuilder.str(), false, conn);
+
+  mysql_close(conn);
+  
   gpuSort(dbServer, dbUser, dbPassword, dbDatabase, result.getCroppedQuery(), result.getSortColumnNumber());
   cpuSort(dbServer, dbUser, dbPassword, dbDatabase, result.getQuery(), result.getSortColumnNumber());
 
