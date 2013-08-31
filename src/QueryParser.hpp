@@ -63,7 +63,6 @@ inline QueryParserResult QueryParser::parse(std::string query, bool explicitType
 
     short i;
     if (matches[1].str() != "*" && explicitType) {
-      std::cout<<"good branch"<<std::endl;
       //iterate over exploded columns and set sortColumnNumber
       std::vector<std::string> columns = QueryParser::explodeColumns(matches[1].str(), ',');
       for (i = 0; i < columns.size(); i++) {
