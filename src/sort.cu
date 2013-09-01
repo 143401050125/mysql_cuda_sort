@@ -11,29 +11,33 @@
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
 
+#include <boost/lexical_cast.hpp>
+
 #include "../lib/inih/cpp/INIReader.h"
 
 #include "QueryParser.hpp"
 
+template <typename T>
 class Sortable
 {
   public:
     int originalIndex;
-    int sortColumn;
+    T sortColumn;
     
     __host__ __device__ Sortable() {};
     
-    __host__ __device__ Sortable(int _originalIndex, int _sortColumn)
+    Sortable(int _originalIndex, char* _sortColumn)
     {
       originalIndex = _originalIndex;
-      sortColumn = _sortColumn;      
+      sortColumn = boost::lexical_cast<T>(_sortColumn);
     }
 };
 
+template <typename TS>
 class Sorter
 {
   public:
-    __host__ __device__ bool operator() (const Sortable& ls, const Sortable& rs) const
+    __host__ __device__ bool operator() (const Sortable<TS>& ls, const Sortable<TS>& rs) const
     {
       return ls.sortColumn < rs.sortColumn;
     }
@@ -58,29 +62,29 @@ void printElapsedTime(const timeval& stopTime, const timeval& startTime, const c
 
 void verifyResult(const thrust::host_vector<MYSQL_ROW>& h_vec, int sortColumnIndex, const char* processorType)
 {
+  int errorCount = 0;
   for (int i = 0; i < h_vec.size(); i++) {
     if (i < (h_vec.size() - 2) && atoi(h_vec[i][sortColumnIndex]) > atoi(h_vec[i + 1][sortColumnIndex])) {
       std::cout<<"Error in "<<processorType<<" sorting at index "<<i<<". "<<h_vec[i][sortColumnIndex]<<" should be less than "<<h_vec[i + 1][sortColumnIndex]<<std::endl;
+      errorCount++;
     }
   }
+  std::cout<<"Errors: "<<errorCount<<std::endl;
 }
 
-void gpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, const char *dbDatabase, std::string query, int sortColumnIndex)
+template <typename TF>
+void gpuSort(MYSQL *conn, std::string query, int sortColumnIndex)
 {
-  MYSQL *conn;
   MYSQL_RES *result;
   MYSQL_ROW row;
   int num_fields;
   
   timeval startTime, stopTime;
 
-  thrust::host_vector<Sortable> h_vec;
+  thrust::host_vector< Sortable<TF> > h_vec;
 
   thrust::host_vector<MYSQL_ROW> h_row_vec, h_row_vec_temp;
   
-  conn = mysql_init(NULL);
-  mysql_real_connect(conn, dbServer, dbUser, dbPassword, dbDatabase, 0, NULL, 0);
-
   gettimeofday(&startTime, NULL);
   
   mysql_query(conn, query.c_str());
@@ -96,14 +100,14 @@ void gpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, c
   while ((row = mysql_fetch_row(result)))
   {
     h_row_vec_temp.push_back(row);
-    Sortable sortable(loopIndex, atoi(row[sortColumnIndex]));
+    Sortable<TF> sortable(loopIndex, row[sortColumnIndex]);
     h_vec.push_back(sortable);
     loopIndex++;
   }
   
-  thrust::device_vector<Sortable> d_vec = h_vec;
+  thrust::device_vector< Sortable<TF> > d_vec = h_vec;
   
-  thrust::sort(d_vec.begin(), d_vec.end(), Sorter());
+  thrust::sort(d_vec.begin(), d_vec.end(), Sorter<TF>());
   
   thrust::copy(d_vec.begin(), d_vec.end(), h_vec.begin());
   
@@ -126,14 +130,12 @@ void gpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, c
   h_row_vec.shrink_to_fit();
 
   mysql_free_result(result);
-  mysql_close(conn);
   
   printElapsedTime(stopTime, startTime, "gpu");
 }
 
-void cpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, const char *dbDatabase, std::string query, int sortColumnIndex)
+void cpuSort(MYSQL *conn, std::string query, int sortColumnIndex)
 {
-  MYSQL *conn;
   MYSQL_RES *result;
   MYSQL_ROW row;
 //   int num_fields;
@@ -142,9 +144,6 @@ void cpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, c
 
   thrust::host_vector<MYSQL_ROW> h_row_vec;
   
-  conn = mysql_init(NULL);
-  mysql_real_connect(conn, dbServer, dbUser, dbPassword, dbDatabase, 0, NULL, 0);
-
   gettimeofday(&startTime, NULL);
   
   mysql_query(conn, query.c_str());
@@ -165,7 +164,6 @@ void cpuSort(const char *dbServer, const char *dbUser, const char *dbPassword, c
   h_row_vec.shrink_to_fit();
 
   mysql_free_result(result);
-  mysql_close(conn);
   
   printElapsedTime(stopTime, startTime, "cpu");
 }
@@ -192,19 +190,36 @@ int main(int argc, char* argv[])
   const char *dbPassword = iniReader.Get("database", "password", "passwd").c_str();
   const char *dbDatabase = iniReader.Get("database", "database", "test").c_str();
   
+  std::vector<std::string> queries;
+  
   std::ostringstream queryBuilder;
   queryBuilder<<"SELECT SQL_NO_CACHE id, text_col, int_col, double_col FROM "<<tableName<<" ORDER BY int_col";
+  queries.push_back(queryBuilder.str());
+  queryBuilder.str("");
+  queryBuilder<<"SELECT SQL_NO_CACHE id, text_col, int_col, double_col FROM "<<tableName<<" ORDER BY double_col";
+  queries.push_back(queryBuilder.str());
 
   MYSQL *conn;
   conn = mysql_init(NULL);
   mysql_real_connect(conn, dbServer, dbUser, dbPassword, dbDatabase, 0, NULL, 0);
 
-  QueryParserResult result = QueryParser::parse(queryBuilder.str(), false, conn);
+  for (int i = 0; i < queries.size(); i++) {
+    QueryParserResult result = QueryParser::parse(queries[i], false, conn);
 
+    std::cout<<"query: "<<result.getQuery()<<std::endl;
+
+    if (result.getSortColumnType() == 3) {
+      std::cout<<"calling gpuSort<int>"<<std::endl;
+      gpuSort<int>(conn, result.getCroppedQuery(), result.getSortColumnNumber());
+    } else if (result.getSortColumnType() == 5) {
+      std::cout<<"calling gpuSort<double>"<<std::endl;
+      gpuSort<double>(conn, result.getCroppedQuery(), result.getSortColumnNumber());
+    }
+    std::cout<<"calling cpuSort"<<std::endl;
+    cpuSort(conn, result.getQuery(), result.getSortColumnNumber());
+  }
+  
   mysql_close(conn);
   
-  gpuSort(dbServer, dbUser, dbPassword, dbDatabase, result.getCroppedQuery(), result.getSortColumnNumber());
-  cpuSort(dbServer, dbUser, dbPassword, dbDatabase, result.getQuery(), result.getSortColumnNumber());
-
   return 0;
 }
